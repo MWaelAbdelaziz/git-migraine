@@ -1,0 +1,10 @@
+# Publish only the built output (see "files" in package.json). This is a
+# belt-and-braces ignore for anything not covered by the allowlist.
+src/
+test/
+.github/
+tsconfig.json
+tsup.config.ts
+vitest.config.ts
+*.tgz
+.DS_Store
