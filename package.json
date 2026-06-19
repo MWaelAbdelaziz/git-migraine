@@ -13,6 +13,14 @@
     "database"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MWaelAbdelaziz/git-migraine.git"
+  },
+  "homepage": "https://github.com/MWaelAbdelaziz/git-migraine#readme",
+  "bugs": {
+    "url": "https://github.com/MWaelAbdelaziz/git-migraine/issues"
+  },
   "type": "module",
   "bin": {
     "git-migraine": "dist/cli.js"
