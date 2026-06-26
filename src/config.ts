@@ -9,13 +9,13 @@
  * The schema both validates and fills in defaults, so the rest of the codebase
  * only ever sees a fully-resolved config.
  */
-import { cosmiconfig } from 'cosmiconfig';
-import { z } from 'zod';
-import { defaultMessages } from './messages.js';
-import type { ResolvedConfig, UserConfig } from './types.js';
+import { cosmiconfig } from "cosmiconfig";
+import { z } from "zod";
+import { defaultMessages } from "./messages.js";
+import type { ResolvedConfig, UserConfig } from "./types.js";
 
 const commandSchema = z.object({
-  command: z.string().min(1, 'command must be a non-empty string'),
+  command: z.string().min(1, "command must be a non-empty string"),
 });
 
 const messagesSchema = z
@@ -25,6 +25,7 @@ const messagesSchema = z
     toUndoHeading: z.string(),
     noChanges: z.string(),
     dryRunNotice: z.string(),
+    showOnlyNotice: z.string(),
     undoing: z.string(),
     applying: z.string(),
     success: z.string(),
@@ -44,6 +45,8 @@ export const userConfigSchema = z
     extensions: z.array(z.string().min(1)).min(1),
     apply: commandSchema,
     undo: commandSchema,
+    autoMigrate: z.boolean(),
+    showMigrations: z.boolean(),
     dryRun: z.boolean(),
     runOnBranchCheckoutOnly: z.boolean(),
     skipDuringRebaseOrMerge: z.boolean(),
@@ -54,10 +57,12 @@ export const userConfigSchema = z
   .strict();
 
 const defaults = {
-  migrationsDir: 'src/core/migrations',
-  extensions: ['.cjs'],
-  apply: { command: 'npx sequelize-cli db:migrate' },
-  undo: { command: 'npx sequelize-cli db:migrate:undo --name {name}' },
+  migrationsDir: "src/core/migrations",
+  extensions: [".cjs"],
+  apply: { command: "npx sequelize-cli db:migrate" },
+  undo: { command: "npx sequelize-cli db:migrate:undo --name {name}" },
+  autoMigrate: false,
+  showMigrations: true,
   dryRun: false,
   runOnBranchCheckoutOnly: true,
   skipDuringRebaseOrMerge: true,
@@ -72,6 +77,8 @@ export const configSchema = userConfigSchema.transform((raw) => ({
   extensions: raw.extensions ?? [...defaults.extensions],
   apply: raw.apply ?? { ...defaults.apply },
   undo: raw.undo ?? { ...defaults.undo },
+  autoMigrate: raw.autoMigrate ?? defaults.autoMigrate,
+  showMigrations: raw.showMigrations ?? defaults.showMigrations,
   dryRun: raw.dryRun ?? defaults.dryRun,
   runOnBranchCheckoutOnly:
     raw.runOnBranchCheckoutOnly ?? defaults.runOnBranchCheckoutOnly,
@@ -95,7 +102,7 @@ export function resolveConfig(raw: unknown): ResolvedConfig {
   return configSchema.parse(raw ?? {});
 }
 
-const MODULE_NAME = 'git-migraine';
+const MODULE_NAME = "git-migraine";
 
 /**
  * Discover and load the config from disk (or fall back to all-defaults).
@@ -104,7 +111,7 @@ const MODULE_NAME = 'git-migraine';
 export async function loadConfig(searchFrom?: string): Promise<ResolvedConfig> {
   const explorer = cosmiconfig(MODULE_NAME, {
     searchPlaces: [
-      'package.json',
+      "package.json",
       `.${MODULE_NAME}rc`,
       `.${MODULE_NAME}rc.json`,
       `.${MODULE_NAME}rc.js`,

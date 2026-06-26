@@ -13,30 +13,25 @@
  * others. At the end it prints a summary, including which files git will want
  * committed (relevant because hooks under `.husky/` are tracked).
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import pc from 'picocolors';
-import {
-  getHooksPath,
-  getLocalAlias,
-  gitDir,
-  setLocalAlias,
-} from '../git.js';
+import fs from "node:fs";
+import path from "node:path";
+import pc from "picocolors";
+import { getHooksPath, getLocalAlias, gitDir, setLocalAlias } from "../git.js";
 
 const HOOK_CALL = 'npx git-migraine sync "$1" "$2" "$3"';
-const MARKER_START = '# >>> git-migraine >>>';
-const MARKER_END = '# <<< git-migraine <<<';
+const MARKER_START = "# >>> git-migraine >>>";
+const MARKER_END = "# <<< git-migraine <<<";
 const MANAGED_BLOCK = `${MARKER_START}\n${HOOK_CALL}\n${MARKER_END}`;
-const PREPARE_CALL = 'git-migraine init';
-const SKIP_ALIAS = 'sco';
-const SKIP_ALIAS_CMD = '!GIT_MIGRAINE_SKIP=1 git checkout';
+const PREPARE_CALL = "git-migraine init";
+const SKIP_ALIAS = "sco";
+const SKIP_ALIAS_CMD = "!GIT_MIGRAINE_SKIP=1 git checkout";
 
 const CONFIG_CANDIDATES = [
-  'src/core/migrations',
-  'src/migrations',
-  'migrations',
-  'db/migrations',
-  'database/migrations',
+  "src/core/migrations",
+  "src/migrations",
+  "migrations",
+  "db/migrations",
+  "database/migrations",
 ];
 
 export interface InitArgs {
@@ -55,10 +50,18 @@ export async function init(args: InitArgs = {}): Promise<number> {
   const results: StepResult[] = [];
   const warnings: string[] = [];
 
-  await safe(() => installHook(cwd, results, warnings), warnings, 'install hook');
-  safeSync(() => scaffoldConfig(cwd, results), warnings, 'scaffold config');
-  safeSync(() => addPrepareScript(cwd, results), warnings, 'add prepare script');
-  await safe(() => addSkipAlias(cwd, results), warnings, 'add skip alias');
+  await safe(
+    () => installHook(cwd, results, warnings),
+    warnings,
+    "install hook",
+  );
+  safeSync(() => scaffoldConfig(cwd, results), warnings, "scaffold config");
+  safeSync(
+    () => addPrepareScript(cwd, results),
+    warnings,
+    "add prepare script",
+  );
+  await safe(() => addSkipAlias(cwd, results), warnings, "add skip alias");
 
   printSummary(results, warnings);
   return 0;
@@ -76,7 +79,7 @@ async function installHook(
 
   if (huskyActive) {
     // husky reads wrappers from `.husky/_`; the user hook lives in `.husky/`.
-    const file = path.join(cwd, '.husky', 'post-checkout');
+    const file = path.join(cwd, ".husky", "post-checkout");
     writeHuskyHook(file);
     results.push({
       message: `Installed hook → ${path.relative(cwd, file)} (husky)`,
@@ -88,8 +91,8 @@ async function installHook(
   // Raw hook: install into whatever dir git reads (core.hooksPath or default).
   const dir = hooksPath
     ? path.resolve(cwd, hooksPath)
-    : path.join(await gitDir(cwd), 'hooks');
-  const file = path.join(dir, 'post-checkout');
+    : path.join(await gitDir(cwd), "hooks");
+  const file = path.join(dir, "post-checkout");
   writeRawHook(file);
 
   const rel = path.relative(cwd, file);
@@ -99,7 +102,7 @@ async function installHook(
   // (we installed where git reads) but warn so they understand the setup.
   if (!huskyActive && huskyInstalled(cwd)) {
     warnings.push(
-      `husky is installed but core.hooksPath is "${hooksPath ?? '(default .git/hooks)'}". ` +
+      `husky is installed but core.hooksPath is "${hooksPath ?? "(default .git/hooks)"}". ` +
         `Installed the hook there so it fires. To use husky's shared hooks instead, run:\n` +
         `    git config core.hooksPath .husky/_   then re-run git-migraine init`,
     );
@@ -108,7 +111,7 @@ async function installHook(
 
 function writeHuskyHook(file: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  let existing = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  let existing = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
   if (existing.includes(HOOK_CALL)) return; // idempotent
   const next =
     existing.trim().length > 0
@@ -120,7 +123,7 @@ function writeHuskyHook(file: string): void {
 
 function writeRawHook(file: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const existing = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  const existing = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
 
   let next: string;
   if (existing.includes(MARKER_START)) {
@@ -144,30 +147,32 @@ function scaffoldConfig(cwd: string, results: StepResult[]): void {
 
   const migrationsDir =
     CONFIG_CANDIDATES.find((dir) => fs.existsSync(path.join(cwd, dir))) ??
-    'migrations';
+    "migrations";
 
   const config = {
     migrationsDir,
-    extensions: ['.cjs'],
-    apply: { command: 'npx sequelize-cli db:migrate' },
-    undo: { command: 'npx sequelize-cli db:migrate:undo --name {name}' },
+    extensions: [".cjs"],
+    apply: { command: "npx sequelize-cli db:migrate" },
+    undo: { command: "npx sequelize-cli db:migrate:undo --name {name}" },
+    autoMigrate: false,
+    showMigrations: true,
   };
 
-  const file = path.join(cwd, '.git-migrainerc.json');
+  const file = path.join(cwd, ".git-migrainerc.json");
   fs.writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
   results.push({
     message: `Created config → .git-migrainerc.json (migrationsDir: ${migrationsDir})`,
-    tracked: '.git-migrainerc.json',
+    tracked: ".git-migrainerc.json",
   });
 }
 
 // ── 3. Add a prepare script for team auto-install ───────────────────
 
 function addPrepareScript(cwd: string, results: StepResult[]): void {
-  const pkgPath = path.join(cwd, 'package.json');
+  const pkgPath = path.join(cwd, "package.json");
   if (!fs.existsSync(pkgPath)) return;
 
-  const raw = fs.readFileSync(pkgPath, 'utf8');
+  const raw = fs.readFileSync(pkgPath, "utf8");
   const pkg = JSON.parse(raw);
   pkg.scripts ??= {};
 
@@ -179,11 +184,11 @@ function addPrepareScript(cwd: string, results: StepResult[]): void {
     : PREPARE_CALL;
 
   // Preserve trailing newline style of the original file.
-  const trailing = raw.endsWith('\n') ? '\n' : '';
+  const trailing = raw.endsWith("\n") ? "\n" : "";
   fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}${trailing}`);
   results.push({
     message: `Added "prepare": "...${PREPARE_CALL}" to package.json (teammates auto-install on npm install)`,
-    tracked: 'package.json',
+    tracked: "package.json",
   });
 }
 
@@ -207,19 +212,19 @@ async function addSkipAlias(cwd: string, results: StepResult[]): Promise<void> {
 // ── Summary ─────────────────────────────────────────────────────────
 
 function printSummary(results: StepResult[], warnings: string[]): void {
-  console.log(pc.bold('\ngit-migraine is set up:\n'));
-  for (const r of results) console.log(`  ${pc.green('✓')} ${r.message}`);
+  console.log(pc.bold("\ngit-migraine is set up:\n"));
+  for (const r of results) console.log(`  ${pc.green("✓")} ${r.message}`);
 
   const tracked = results.map((r) => r.tracked).filter(Boolean);
   if (tracked.length > 0) {
-    console.log(pc.bold('\nCommit these so your team gets them:'));
+    console.log(pc.bold("\nCommit these so your team gets them:"));
     for (const t of tracked) console.log(pc.cyan(`  ${t}`));
   }
 
-  for (const w of warnings) console.log(`\n${pc.yellow('!')} ${w}`);
+  for (const w of warnings) console.log(`\n${pc.yellow("!")} ${w}`);
 
   console.log(
-    pc.dim('\nDone. Switch branches as usual and migrations stay in sync.'),
+    pc.dim("\nDone. Switch branches as usual and migrations stay in sync."),
   );
 }
 
@@ -227,15 +232,15 @@ function printSummary(results: StepResult[], warnings: string[]): void {
 
 function isHuskyHooksPath(hooksPath: string | undefined): boolean {
   if (!hooksPath) return false;
-  const normalized = hooksPath.replace(/\\/g, '/').replace(/\/+$/, '');
-  return normalized.endsWith('.husky/_') || normalized.endsWith('.husky');
+  const normalized = hooksPath.replace(/\\/g, "/").replace(/\/+$/, "");
+  return normalized.endsWith(".husky/_") || normalized.endsWith(".husky");
 }
 
 function huskyInstalled(cwd: string): boolean {
-  if (fs.existsSync(path.join(cwd, '.husky'))) return true;
+  if (fs.existsSync(path.join(cwd, ".husky"))) return true;
   try {
     const pkg = JSON.parse(
-      fs.readFileSync(path.join(cwd, 'package.json'), 'utf8'),
+      fs.readFileSync(path.join(cwd, "package.json"), "utf8"),
     );
     return Boolean(pkg.devDependencies?.husky || pkg.dependencies?.husky);
   } catch {
@@ -245,20 +250,20 @@ function huskyInstalled(cwd: string): boolean {
 
 function hasConfig(cwd: string): boolean {
   const files = [
-    'git-migraine.config.js',
-    'git-migraine.config.cjs',
-    'git-migraine.config.mjs',
-    '.git-migrainerc',
-    '.git-migrainerc.json',
-    '.git-migrainerc.js',
-    '.git-migrainerc.cjs',
+    "git-migraine.config.js",
+    "git-migraine.config.cjs",
+    "git-migraine.config.mjs",
+    ".git-migrainerc",
+    ".git-migrainerc.json",
+    ".git-migrainerc.js",
+    ".git-migrainerc.cjs",
   ];
   if (files.some((f) => fs.existsSync(path.join(cwd, f)))) return true;
   try {
     const pkg = JSON.parse(
-      fs.readFileSync(path.join(cwd, 'package.json'), 'utf8'),
+      fs.readFileSync(path.join(cwd, "package.json"), "utf8"),
     );
-    return pkg['git-migraine'] !== undefined;
+    return pkg["git-migraine"] !== undefined;
   } catch {
     return false;
   }
@@ -289,5 +294,5 @@ function errMsg(error: unknown): string {
 }
 
 function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

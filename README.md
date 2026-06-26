@@ -1,16 +1,22 @@
 # git-migraine
 
-> A cure for migration headaches. Automatically **apply** and **undo** Sequelize
-> migrations when you switch git branches.
+> A cure for migration headaches. See — and optionally **apply** and **undo** —
+> the Sequelize migrations that change when you switch git branches.
 
-When you check out a branch that added migrations, git-migraine runs them. When
-you go back to a branch that doesn't have them, it rolls them back — restoring
-each removed migration file from the previous commit so `sequelize-cli` can undo
-it cleanly. No more "did I forget a migration?" and no more dirty local DBs after
-branch hopping.
+When you check out a branch that added migrations, git-migraine tells you which
+ones to apply. When you go back to a branch that doesn't have them, it tells you
+which to roll back. No more "did I forget a migration?" and no more dirty local
+DBs after branch hopping.
+
+By default it is **report-only** (`autoMigrate: false`): it just prints the
+migrations to apply and undo, leaving your database untouched. Flip
+`autoMigrate: true` and it will run them for you — restoring each removed
+migration file from the previous commit first so `sequelize-cli` can undo it
+cleanly.
 
 It works by diffing the migration files between the commit you left and the
-commit you landed on, then running your configured apply/undo commands.
+commit you landed on, then either reporting or running your configured
+apply/undo commands.
 
 ## Install
 
@@ -62,6 +68,8 @@ export default defineConfig({
   extensions: ['.cjs', '.js'],
   apply: { command: 'npx sequelize-cli db:migrate' },
   undo: { command: 'npx sequelize-cli db:migrate:undo --name {name}' },
+  autoMigrate: false,
+  showMigrations: true,
 });
 ```
 
@@ -73,7 +81,9 @@ export default defineConfig({
 | `extensions` | `['.cjs']` | File extensions that count as migrations. |
 | `apply.command` | `npx sequelize-cli db:migrate` | Command run once to apply pending migrations. |
 | `undo.command` | `npx sequelize-cli db:migrate:undo --name {name}` | Command run per removed migration. `{name}` is the migration's basename without extension. |
-| `dryRun` | `false` | Print what would change without running anything. Also via `--dry-run`. |
+| `autoMigrate` | `false` | When `true`, automatically run the apply/undo commands on a branch switch. When `false` (the default), git-migraine **only shows** the migrations to apply and undo — it never touches your database. |
+| `showMigrations` | `true` | Print the lists of migrations to apply/undo on each branch switch. Set to `false` for silent operation. |
+| `dryRun` | `false` | Force report-only even when `autoMigrate` is `true`. Also available via `--dry-run`. |
 | `runOnBranchCheckoutOnly` | `true` | Ignore file checkouts (`git checkout <file>`); only act on branch switches. |
 | `skipDuringRebaseOrMerge` | `true` | Don't run mid rebase/merge — only on the final settled checkout. |
 | `cwd` | `process.cwd()` | Repo root to operate in. |
@@ -103,7 +113,8 @@ ones you want; the rest keep their defaults.
 | `applying` | before applying new migrations | — |
 | `undoing` | before rolling back each migration | `{name}` |
 | `success` | everything synced | `{fromBranch}` `{toBranch}` `{applyCount}` `{undoCount}` |
-| `dryRunNotice` | running with `--dry-run` | — |
+| `dryRunNotice` | running with `--dry-run` (or `dryRun: true`) | — |
+| `showOnlyNotice` | `autoMigrate` is off and changes were found | — |
 | `applyFailed` / `undoFailed` / `restoreFailed` | a step fails | `{name}` |
 
 ### Running migrations inside Docker

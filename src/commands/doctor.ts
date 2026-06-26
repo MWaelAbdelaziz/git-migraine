@@ -51,6 +51,8 @@ export async function doctor(): Promise<number> {
           extensions: config.extensions,
           apply: config.apply,
           undo: config.undo,
+          autoMigrate: config.autoMigrate,
+          showMigrations: config.showMigrations,
           dryRun: config.dryRun,
           runOnBranchCheckoutOnly: config.runOnBranchCheckoutOnly,
           skipDuringRebaseOrMerge: config.skipDuringRebaseOrMerge,

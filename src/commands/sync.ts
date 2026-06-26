@@ -5,17 +5,17 @@
  * a flag that is 1 for a branch checkout and 0 for a file checkout. We diff the
  * migration files between the two commits and apply/undo the difference.
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import pc from 'picocolors';
-import type { ResolvedConfig } from '../types.js';
-import { loadConfig } from '../config.js';
+import fs from "node:fs";
+import path from "node:path";
+import pc from "picocolors";
+import type { ResolvedConfig } from "../types.js";
+import { loadConfig } from "../config.js";
 import {
   computeDiff,
   filterMigrations,
   isSafeMigrationName,
   migrationName,
-} from '../diff.js';
+} from "../diff.js";
 import {
   ZERO_REF,
   currentBranch,
@@ -23,9 +23,9 @@ import {
   listFilesAtCommit,
   refName,
   showFileAtCommit,
-} from './../git.js';
-import { interpolate } from '../messages.js';
-import { runApply, runUndo } from '../runner.js';
+} from "./../git.js";
+import { interpolate } from "../messages.js";
+import { runApply, runUndo } from "../runner.js";
 
 export interface SyncArgs {
   oldRef: string;
@@ -44,21 +44,22 @@ export interface SyncArgs {
  */
 function isSkipRequested(): boolean {
   const value = process.env.GIT_MIGRAINE_SKIP?.trim().toLowerCase();
-  return value === '1' || value === 'true' || value === 'yes';
+  return value === "1" || value === "true" || value === "yes";
 }
 
 export async function sync(args: SyncArgs): Promise<number> {
   const config = args.config ?? (await loadConfig());
   const cwd = config.cwd;
   const dryRun = args.dryRun || config.dryRun;
+  const willMigrate = config.autoMigrate && !dryRun;
   const msg = config.messages;
 
   // ── Guard rails ───────────────────────────────────────────────
   if (isSkipRequested()) {
-    console.log(pc.dim('⏭  GIT_MIGRAINE_SKIP set — skipping migration sync.'));
+    console.log(pc.dim("⏭  GIT_MIGRAINE_SKIP set — skipping migration sync."));
     return 0; // user opted out of this checkout
   }
-  if (config.runOnBranchCheckoutOnly && args.branchFlag !== '1') {
+  if (config.runOnBranchCheckoutOnly && args.branchFlag !== "1") {
     return 0; // file checkout, not a branch switch
   }
   if (args.oldRef === ZERO_REF) {
@@ -76,8 +77,16 @@ export async function sync(args: SyncArgs): Promise<number> {
     listFilesAtCommit(args.oldRef, cwd),
     listFilesAtCommit(args.newRef, cwd),
   ]);
-  const prev = filterMigrations(prevAll, config.migrationsDir, config.extensions);
-  const next = filterMigrations(newAll, config.migrationsDir, config.extensions);
+  const prev = filterMigrations(
+    prevAll,
+    config.migrationsDir,
+    config.extensions,
+  );
+  const next = filterMigrations(
+    newAll,
+    config.migrationsDir,
+    config.extensions,
+  );
   const { toApply, toUndo } = computeDiff(prev, next);
 
   const [fromBranch, toBranch] = await Promise.all([
@@ -97,18 +106,25 @@ export async function sync(args: SyncArgs): Promise<number> {
   }
 
   // ── Report ────────────────────────────────────────────────────
-  console.log(`\n${pc.bold(msg.foundChanges)}`);
-  if (toUndo.length > 0) {
-    console.log(`\n${pc.red(msg.toUndoHeading)}`);
-    for (const file of toUndo) console.log(pc.red(`  - ${file}`));
-  }
-  if (toApply.length > 0) {
-    console.log(`\n${pc.green(msg.toApplyHeading)}`);
-    for (const file of toApply) console.log(pc.green(`  + ${file}`));
+  // `showMigrations` (default true) controls whether we print the lists of
+  // migrations to apply/undo. Turn it off for fully silent operation.
+  if (config.showMigrations) {
+    console.log(`\n${pc.bold(msg.foundChanges)}`);
+    if (toUndo.length > 0) {
+      console.log(`\n${pc.red(msg.toUndoHeading)}`);
+      for (const file of toUndo) console.log(pc.red(`  - ${file}`));
+    }
+    if (toApply.length > 0) {
+      console.log(`\n${pc.green(msg.toApplyHeading)}`);
+      for (const file of toApply) console.log(pc.green(`  + ${file}`));
+    }
   }
 
-  if (dryRun) {
-    console.log(`\n${pc.yellow(interpolate(msg.dryRunNotice, vars))}`);
+  // When we are not migrating (auto-migrate off or an explicit dry run), report
+  // why and stop before touching the database.
+  if (!willMigrate) {
+    const notice = dryRun ? msg.dryRunNotice : msg.showOnlyNotice;
+    console.log(`\n${pc.yellow(interpolate(notice, vars))}`);
     return 0;
   }
 

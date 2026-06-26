@@ -13,6 +13,18 @@ describe('resolveConfig', () => {
     expect(config.skipDuringRebaseOrMerge).toBe(true);
   });
 
+  it('defaults to reporting only: autoMigrate off, showMigrations on', () => {
+    const config = resolveConfig({});
+    expect(config.autoMigrate).toBe(false);
+    expect(config.showMigrations).toBe(true);
+  });
+
+  it('lets the user opt into running migrations and hiding the lists', () => {
+    const config = resolveConfig({ autoMigrate: true, showMigrations: false });
+    expect(config.autoMigrate).toBe(true);
+    expect(config.showMigrations).toBe(false);
+  });
+
   it('accepts undefined as all-defaults', () => {
     expect(resolveConfig(undefined).migrationsDir).toBe('src/core/migrations');
   });

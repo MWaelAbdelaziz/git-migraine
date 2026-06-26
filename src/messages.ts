@@ -11,6 +11,7 @@ export interface Messages {
   toUndoHeading: string;
   noChanges: string;
   dryRunNotice: string;
+  showOnlyNotice: string;
   undoing: string;
   applying: string;
   success: string;
@@ -26,6 +27,8 @@ export const defaultMessages: Messages = {
   noChanges:
     '✅ No migration changes between {fromBranch} and {toBranch}. Nothing to do.',
   dryRunNotice: '🔍 Dry run — printing changes only, not running anything.',
+  showOnlyNotice:
+    '🩹 autoMigrate is off — showing migrations only, nothing was run. Apply them yourself, or set "autoMigrate": true to run them automatically.',
   undoing: 'Rolling back: {name}',
   applying: 'Applying new migrations...',
   success:
