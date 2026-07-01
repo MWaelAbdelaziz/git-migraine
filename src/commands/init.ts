@@ -16,9 +16,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
-import { getHooksPath, getLocalAlias, gitDir, setLocalAlias } from "../git.js";
+import { getLocalAlias, resolveHookTarget, setLocalAlias } from "../git.js";
 
-const HOOK_CALL = 'npx git-migraine sync "$1" "$2" "$3"';
+// The hook resolves git-migraine from the repo's own node_modules and only runs
+// when that binary exists. So `npm uninstall git-migraine` makes the hook inert
+// on its own — no redownload via npx, no mandatory cleanup step. Tidy the
+// leftover block whenever you like with `git-migraine uninstall`.
+const HOOK_CALL = [
+  'GM_BIN="$(git rev-parse --show-toplevel)/node_modules/.bin/git-migraine"',
+  '[ -x "$GM_BIN" ] && "$GM_BIN" sync "$1" "$2" "$3"',
+].join("\n");
 const MARKER_START = "# >>> git-migraine >>>";
 const MARKER_END = "# <<< git-migraine <<<";
 const MANAGED_BLOCK = `${MARKER_START}\n${HOOK_CALL}\n${MARKER_END}`;
@@ -74,33 +81,36 @@ async function installHook(
   results: StepResult[],
   warnings: string[],
 ): Promise<void> {
-  const hooksPath = await getHooksPath(cwd);
-  const huskyActive = isHuskyHooksPath(hooksPath);
+  const { file, husky, hooksPath } = await resolveHookTarget(cwd);
+  const existing = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
 
-  if (huskyActive) {
-    // husky reads wrappers from `.husky/_`; the user hook lives in `.husky/`.
-    const file = path.join(cwd, ".husky", "post-checkout");
-    writeHuskyHook(file);
-    results.push({
-      message: `Installed hook → ${path.relative(cwd, file)} (husky)`,
-      tracked: path.relative(cwd, file),
-    });
-    return;
-  }
+  // A pre-existing hook with content that isn't ours: we append after it rather
+  // than clobber, but the user should know the ordering (theirs runs first).
+  const appendedToForeignHook =
+    existing.trim().length > 0 && !existing.includes(MARKER_START);
 
-  // Raw hook: install into whatever dir git reads (core.hooksPath or default).
-  const dir = hooksPath
-    ? path.resolve(cwd, hooksPath)
-    : path.join(await gitDir(cwd), "hooks");
-  const file = path.join(dir, "post-checkout");
-  writeRawHook(file);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, upsertManagedBlock(existing, husky));
+  fs.chmodSync(file, 0o755);
 
   const rel = path.relative(cwd, file);
-  results.push({ message: `Installed hook → ${rel}` });
+  results.push({
+    message: `Installed hook → ${rel}${husky ? " (husky)" : ""}`,
+    // .husky/ hooks are committed; .git/hooks are local-only.
+    tracked: husky ? rel : undefined,
+  });
+
+  if (appendedToForeignHook) {
+    warnings.push(
+      `Found an existing ${rel}; appended git-migraine after it (so your hook runs ` +
+        `first, then git-migraine). Reorder the "${MARKER_START}" block if you'd ` +
+        `rather it ran earlier. Remove it anytime with: npx git-migraine uninstall`,
+    );
+  }
 
   // If husky is present but not the active hooks path, the hook still works
   // (we installed where git reads) but warn so they understand the setup.
-  if (!huskyActive && huskyInstalled(cwd)) {
+  if (!husky && huskyInstalled(cwd)) {
     warnings.push(
       `husky is installed but core.hooksPath is "${hooksPath ?? "(default .git/hooks)"}". ` +
         `Installed the hook there so it fires. To use husky's shared hooks instead, run:\n` +
@@ -109,35 +119,22 @@ async function installHook(
   }
 }
 
-function writeHuskyHook(file: string): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  let existing = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
-  if (existing.includes(HOOK_CALL)) return; // idempotent
-  const next =
-    existing.trim().length > 0
-      ? `${existing.trimEnd()}\n${HOOK_CALL}\n`
-      : `${HOOK_CALL}\n`;
-  fs.writeFileSync(file, next);
-  fs.chmodSync(file, 0o755);
-}
-
-function writeRawHook(file: string): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const existing = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
-
-  let next: string;
+/**
+ * Insert (or refresh) the managed block in an existing hook file's contents.
+ * Idempotent: a re-run replaces our block in place rather than duplicating it.
+ */
+function upsertManagedBlock(existing: string, husky: boolean): string {
   if (existing.includes(MARKER_START)) {
-    next = existing.replace(
+    return existing.replace(
       new RegExp(`${escapeRe(MARKER_START)}[\\s\\S]*?${escapeRe(MARKER_END)}`),
       MANAGED_BLOCK,
     );
-  } else if (existing.trim().length > 0) {
-    next = `${existing.trimEnd()}\n\n${MANAGED_BLOCK}\n`;
-  } else {
-    next = `#!/bin/sh\n${MANAGED_BLOCK}\n`;
   }
-  fs.writeFileSync(file, next);
-  fs.chmodSync(file, 0o755);
+  if (existing.trim().length > 0) {
+    return `${existing.trimEnd()}\n\n${MANAGED_BLOCK}\n`;
+  }
+  // Fresh file: husky sources its hooks so they need no shebang; raw hooks do.
+  return husky ? `${MANAGED_BLOCK}\n` : `#!/bin/sh\n${MANAGED_BLOCK}\n`;
 }
 
 // ── 2. Scaffold a starter config ────────────────────────────────────
@@ -229,12 +226,6 @@ function printSummary(results: StepResult[], warnings: string[]): void {
 }
 
 // ── helpers ─────────────────────────────────────────────────────────
-
-function isHuskyHooksPath(hooksPath: string | undefined): boolean {
-  if (!hooksPath) return false;
-  const normalized = hooksPath.replace(/\\/g, "/").replace(/\/+$/, "");
-  return normalized.endsWith(".husky/_") || normalized.endsWith(".husky");
-}
 
 function huskyInstalled(cwd: string): boolean {
   if (fs.existsSync(path.join(cwd, ".husky"))) return true;

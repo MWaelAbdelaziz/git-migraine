@@ -30,8 +30,10 @@ describe('init', () => {
       path.join(repo, '.git/hooks/post-checkout'),
       'utf8',
     );
-    expect(hook).toContain('git-migraine sync');
+    // Calls the locally-installed binary (not npx) so an uninstall makes it inert.
+    expect(hook).toContain('node_modules/.bin/git-migraine');
     expect(hook).toContain('# >>> git-migraine >>>');
+    expect(hook).not.toContain('npx git-migraine');
   });
 
   it('installs into .husky/post-checkout when core.hooksPath points at husky', async () => {
@@ -44,7 +46,8 @@ describe('init', () => {
       path.join(repo, '.husky/post-checkout'),
       'utf8',
     );
-    expect(hook).toContain('npx git-migraine sync');
+    expect(hook).toContain('node_modules/.bin/git-migraine');
+    expect(hook).toContain('# >>> git-migraine >>>');
     // must NOT pollute the husky wrappers dir
     expect(fs.existsSync(path.join(repo, '.husky/_/post-checkout'))).toBe(false);
   });
@@ -113,11 +116,25 @@ describe('init', () => {
       path.join(repo, '.git/hooks/post-checkout'),
       'utf8',
     );
-    expect(hook.match(/git-migraine sync/g)?.length).toBe(1);
+    expect(hook.match(/# >>> git-migraine >>>/g)?.length).toBe(1);
 
     const pkg = JSON.parse(
       fs.readFileSync(path.join(repo, 'package.json'), 'utf8'),
     );
     expect(pkg.scripts.prepare).toBe('git-migraine init');
+  });
+
+  it('appends after an existing post-checkout hook without clobbering it', async () => {
+    const hookPath = path.join(repo, '.git/hooks/post-checkout');
+    fs.writeFileSync(hookPath, '#!/bin/sh\necho "my own hook"\n');
+
+    await init({ cwd: repo });
+
+    const hook = fs.readFileSync(hookPath, 'utf8');
+    expect(hook).toContain('echo "my own hook"'); // user's hook preserved
+    expect(hook).toContain('# >>> git-migraine >>>'); // ours appended after
+    expect(hook.indexOf('my own hook')).toBeLessThan(
+      hook.indexOf('# >>> git-migraine >>>'),
+    );
   });
 });

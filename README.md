@@ -35,6 +35,10 @@ npx git-migraine init
 1. **Installs the `post-checkout` hook** where git actually reads hooks — it
    honours `core.hooksPath`, so it lands in [husky](https://typicode.github.io/husky/)'s
    path when husky is active, a custom hooks path, or `.git/hooks` otherwise.
+   The hook calls the copy of git-migraine in your repo's `node_modules` and
+   only runs when it is present — so removing the package makes the hook inert
+   (see [Uninstalling](#uninstalling)). If a `post-checkout` hook already exists,
+   `init` appends after it (your hook runs first) and tells you so.
 2. **Scaffolds a config file** (`.git-migrainerc.json`) if you don't have one,
    pre-filled with a detected migrations folder.
 3. **Adds a `prepare` script** to `package.json` so teammates get the hook
@@ -45,6 +49,37 @@ npx git-migraine init
 It prints a summary of what changed and which files to commit (the hook under
 `.husky/`, the config, and `package.json` are tracked — commit them to share
 with your team).
+
+## Uninstalling
+
+Because git-migraine's hook calls the binary in your repo's `node_modules`
+(and only if it exists), removing the package is enough to stop it:
+
+```bash
+npm uninstall git-migraine
+```
+
+After that, the leftover hook block is inert — the checkout hook finds no
+`git-migraine` binary and does nothing. It won't re-download or run again.
+
+To also tidy up everything `init` added (the hook block, the `git sco` alias,
+and the `prepare` entry), run the reverse command **before** removing the
+package:
+
+```bash
+npx git-migraine uninstall
+```
+
+`uninstall` is idempotent and best-effort, mirroring `init`. It:
+
+- **removes the `# >>> git-migraine >>>` … `<<<` block** from the `post-checkout`
+  hook — deleting the hook file if git-migraine created the whole thing, or
+  leaving your own hook intact if it was there first;
+- **drops the `git-migraine init` entry** from the `prepare` script (removing
+  `prepare` only if it becomes empty);
+- **removes the `git sco` alias** (only if it is still the one `init` set);
+- **leaves your `.git-migrainerc.json` config in place** — it's yours; delete it
+  by hand if you no longer want it.
 
 ### Requirements
 
@@ -135,6 +170,7 @@ export default defineConfig({
 ```
 git-migraine sync <oldRef> <newRef> <branchFlag> [--dry-run]   # called by the hook
 git-migraine init                                              # install the hook
+git-migraine uninstall                                         # remove the hook, alias, prepare entry
 git-migraine doctor                                            # check config + env
 ```
 

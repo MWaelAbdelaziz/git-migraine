@@ -90,6 +90,48 @@ export async function getLocalAlias(
   }
 }
 
+/** Remove a local git alias. No-op if it is not set. */
+export async function unsetLocalAlias(name: string, cwd: string): Promise<void> {
+  try {
+    await execa('git', ['config', '--unset', `alias.${name}`], { cwd });
+  } catch {
+    // exit code 5 → the alias was not set; nothing to undo.
+  }
+}
+
+/** True when `core.hooksPath` points at husky's managed hook directories. */
+export function isHuskyHooksPath(hooksPath: string | undefined): boolean {
+  if (!hooksPath) return false;
+  const normalized = hooksPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  return normalized.endsWith('.husky/_') || normalized.endsWith('.husky');
+}
+
+/**
+ * Resolve where git-migraine's `post-checkout` hook lives (or should live):
+ *   - husky active        → `<cwd>/.husky/post-checkout`
+ *   - custom hooksPath     → `<that dir>/post-checkout`
+ *   - default             → `<gitDir>/hooks/post-checkout`
+ *
+ * Shared by `init` (to write it) and `uninstall` (to remove it) so both always
+ * agree on the location.
+ */
+export async function resolveHookTarget(
+  cwd: string,
+): Promise<{ file: string; husky: boolean; hooksPath: string | undefined }> {
+  const hooksPath = await getHooksPath(cwd);
+  const husky = isHuskyHooksPath(hooksPath);
+
+  if (husky) {
+    // husky reads wrappers from `.husky/_`; the user hook lives in `.husky/`.
+    return { file: path.join(cwd, '.husky', 'post-checkout'), husky, hooksPath };
+  }
+
+  const dir = hooksPath
+    ? path.resolve(cwd, hooksPath)
+    : path.join(await gitDir(cwd), 'hooks');
+  return { file: path.join(dir, 'post-checkout'), husky, hooksPath };
+}
+
 /**
  * True while a rebase or merge is mid-flight. During a rebase, post-checkout
  * can fire once per replayed commit; we want to act only on the final settled

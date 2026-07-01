@@ -6,12 +6,15 @@
  *       The post-checkout entry point. Wired up by `init`.
  *   git-migraine init
  *       Install the post-checkout hook (husky-aware).
+ *   git-migraine uninstall
+ *       Reverse init: remove the hook block, alias, and prepare entry.
  *   git-migraine doctor
  *       Validate config + environment.
  */
 import pc from 'picocolors';
 import { sync } from './commands/sync.js';
 import { init } from './commands/init.js';
+import { uninstall } from './commands/uninstall.js';
 import { doctor } from './commands/doctor.js';
 
 const HELP = `${pc.bold('git-migraine')} — branch-aware Sequelize migrations
@@ -19,12 +22,14 @@ const HELP = `${pc.bold('git-migraine')} — branch-aware Sequelize migrations
 ${pc.bold('Usage:')}
   git-migraine sync <oldRef> <newRef> <branchFlag> [--dry-run]
   git-migraine init
+  git-migraine uninstall
   git-migraine doctor
 
 ${pc.bold('Commands:')}
-  sync     Apply/undo migrations for a branch switch (called by the git hook)
-  init     Install the post-checkout git hook (uses husky if present)
-  doctor   Check configuration and environment
+  sync       Apply/undo migrations for a branch switch (called by the git hook)
+  init       Install the post-checkout git hook (uses husky if present)
+  uninstall  Remove the hook, alias, and prepare entry that init added
+  doctor     Check configuration and environment
 
 ${pc.bold('Flags:')}
   --dry-run   Print what would change without running any migrations
@@ -61,6 +66,8 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'init':
       return init();
+    case 'uninstall':
+      return uninstall();
     case 'doctor':
       return doctor();
     default:

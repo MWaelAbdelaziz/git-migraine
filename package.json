@@ -1,6 +1,6 @@
 {
   "name": "git-migraine",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Automatically apply and undo Sequelize migrations when you switch git branches. A cure for migration headaches.",
   "keywords": [
     "sequelize",

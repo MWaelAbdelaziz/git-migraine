@@ -7,6 +7,7 @@
 export { defineConfig, loadConfig, resolveConfig } from './config.js';
 export { sync } from './commands/sync.js';
 export { init } from './commands/init.js';
+export { uninstall } from './commands/uninstall.js';
 export { doctor } from './commands/doctor.js';
 export {
   computeDiff,
